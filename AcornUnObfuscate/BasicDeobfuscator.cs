@@ -1,147 +1,577 @@
-﻿using System;
+﻿
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace AcornUnObfuscate
 {
-        public class BasicDeobfuscator
+    public class BasicDeobfuscator
+    {
+        private Dictionary<string, string> variableMap;
+        private Dictionary<string, string> procMap;
+        private Dictionary<string, VariableContext> variableContexts;
+        private int nextVarNumber;
+
+        public BasicDeobfuscator()
         {
-            private Dictionary<string, string> variableMap;
-            private int nextVarNumber;
+            variableMap = new Dictionary<string, string>();
+            procMap = new Dictionary<string, string>();
+            variableContexts = new Dictionary<string, VariableContext>();
+            nextVarNumber = 1;
+        }
 
-            public BasicDeobfuscator()
+        private readonly Dictionary<string, string[]> contextKeywords = new Dictionary<string, string[]>
+        {
+            { "File", new[] { "OPENIN", "OPENOUT", "CLOSE", "BGET", "BPUT", "EOF", "PTR", "EXT" } },
+            { "Error", new[] { "ERROR", "ERR", "ERL", "REPORT" } },
+            { "Counter", new[] { "FOR", "NEXT", "STEP", "COUNT" } },
+            { "Flag", new[] { "TRUE", "FALSE", "IF", "THEN", "ELSE" } },
+            { "Menu", new[] { "MENU", "ITEM", "SELECT" } },
+            { "Window", new[] { "WINDOW", "CLOSE", "TITLE" } }
+        };
+
+        public List<string> DeobfuscateCode(List<string> lines)
+        {
+            // First pass: gather context
+            GatherContext(lines);
+
+            // Second pass: determine meaningful names
+            DetermineNames();
+
+            var result = new List<string>();
+            var indentLevel = 0;
+
+            foreach (var line in lines)
             {
-                variableMap = new Dictionary<string, string>();
-                nextVarNumber = 1;
-            }
+                // Split line number and content
+                var match = Regex.Match(line, @"^(\d+)\s+(.*)$");
+                if (!match.Success) continue;
 
-            public List<string> DeobfuscateCode(List<string> lines)
-            {
-                var result = new List<string>();
-                var indentLevel = 0;
+                var lineNumber = match.Groups[1].Value;
+                var content = match.Groups[2].Value;
 
-                foreach (var line in lines)
+                // Process the line content
+                var deobfuscatedLine = DeobfuscateLine(content);
+
+                // Handle indentation based on keywords
+                var statements = deobfuscatedLine.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+                var firstStatement = statements[0].Trim();
+
+                // Reduce indent for ending blocks
+                if (firstStatement.StartsWith("END") ||
+                    firstStatement.StartsWith("NEXT") ||
+                    firstStatement.StartsWith("UNTIL") ||
+                    firstStatement.StartsWith("ELSE"))
                 {
-                    // Split line number and content
-                    var match = Regex.Match(line, @"^(\d+)\s+(.*)$");
-                    if (!match.Success) continue;
-
-                    var lineNumber = match.Groups[1].Value;
-                    var content = match.Groups[2].Value;
-
-                    // Process the line content
-                    var deobfuscatedLine = DeobfuscateLine(content);
-
-                    // Handle indentation based on keywords
-                    var statements = deobfuscatedLine.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
-                    var firstStatement = statements[0].Trim();
-
-                    // Reduce indent for ending blocks
-                    if (firstStatement.StartsWith("END") ||
-                        firstStatement.StartsWith("NEXT") ||
-                        firstStatement.StartsWith("UNTIL") ||
-                        firstStatement.StartsWith("ELSE"))
-                    {
-                        indentLevel = Math.Max(0, indentLevel - 1);
-                    }
-
-                    // Ensure non-negative indent
-                    var adjustedIndent = Math.Max(0, indentLevel);
-
-                    // Build the formatted line
-                    var formattedLine = $"{lineNumber} {new string(' ', adjustedIndent * 2)}{deobfuscatedLine}";
-                    result.Add(formattedLine);
-
-                    // Adjust indent for next line based on current line content
-                    foreach (var statement in statements)
-                    {
-                        var trimmedStatement = statement.Trim();
-
-                        // Increase indent after these structures
-                        if (trimmedStatement.Contains("THEN") ||
-                            trimmedStatement.StartsWith("FOR") ||
-                            trimmedStatement.StartsWith("REPEAT") ||
-                            trimmedStatement.EndsWith("OF") ||
-                            (trimmedStatement.StartsWith("CASE") && !trimmedStatement.StartsWith("ENDCASE")))
-                        {
-                            indentLevel++;
-                        }
-                        // Handle ELSE specifically - we've already decreased for it, now increase for the following block
-                        else if (trimmedStatement.StartsWith("ELSE"))
-                        {
-                            indentLevel++;
-                        }
-                    }
+                    indentLevel = Math.Max(0, indentLevel - 1);
                 }
 
-                return result;
-            }
+                // Ensure non-negative indent
+                var adjustedIndent = Math.Max(0, indentLevel);
 
-            private string DeobfuscateLine(string line)
-            {
-                // Split multiple statements on colon
-                var statements = line.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
-                var processedStatements = new List<string>();
+                // Build the formatted line
+                var formattedLine = $"{lineNumber} {new string(' ', adjustedIndent * 2)}{deobfuscatedLine}";
+                result.Add(formattedLine);
 
+                // Adjust indent for next line based on current line content
                 foreach (var statement in statements)
                 {
-                    var processed = ProcessStatement(statement);
-                    processedStatements.Add(processed);
-                }
+                    var trimmedStatement = statement.Trim();
 
-                return string.Join(" : ", processedStatements);
+                    // Increase indent after these structures
+                    if (trimmedStatement.Contains("THEN") ||
+                        trimmedStatement.StartsWith("FOR") ||
+                        trimmedStatement.StartsWith("REPEAT") ||
+                        trimmedStatement.EndsWith("OF") ||
+                        (trimmedStatement.StartsWith("CASE") && !trimmedStatement.StartsWith("ENDCASE")))
+                    {
+                        indentLevel++;
+                    }
+                    // Handle ELSE specifically - we've already decreased for it, now increase for the following block
+                    else if (trimmedStatement.StartsWith("ELSE"))
+                    {
+                        indentLevel++;
+                    }
+                }
             }
 
-            private string ProcessStatement(string statement)
+            return result;
+        }
+
+        private string DeobfuscateLine(string line)
+        {
+            // Split multiple statements on colon
+            var statements = line.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+            var processedStatements = new List<string>();
+
+            foreach (var statement in statements)
             {
-                // Add spaces around operators
-                statement = Regex.Replace(statement, @"([\+\-\*\/\=\<\>\,])", " $1 ");
+                var processed = ProcessStatement(statement);
+                processedStatements.Add(processed);
+            }
 
-                // Handle variable renaming
-                statement = RenameVariables(statement);
+            return string.Join(" : ", processedStatements);
+        }
 
-                // Add space after keywords
-                var keywords = new[] { "IF", "THEN", "ELSE", "FOR", "TO", "STEP", "NEXT",
+        private string ProcessStatement(string statement)
+        {
+            // Add spaces around operators
+            statement = Regex.Replace(statement, @"([\+\-\*\/\=\<\>\,])", " $1 ");
+
+            // Handle variable renaming
+            statement = RenameVariables(statement);
+
+            // Add space after keywords
+            var keywords = new[] { "IF", "THEN", "ELSE", "FOR", "TO", "STEP", "NEXT",
                                  "CASE", "OF", "WHEN", "ENDCASE", "REPEAT", "UNTIL" };
-                foreach (var keyword in keywords)
+            foreach (var keyword in keywords)
+            {
+                statement = Regex.Replace(statement,
+                    $@"\b{keyword}\b",
+                    $"{keyword} ",
+                    RegexOptions.IgnoreCase);
+            }
+
+            // Clean up multiple spaces
+            statement = Regex.Replace(statement, @"\s+", " ").Trim();
+
+            return statement;
+        }
+
+        private string RenameVariables(string statement)
+        {
+            // Find variables (letter followed by % or $)
+            var matches = Regex.Matches(statement, @"\b([a-zA-Z]+[%$])\b");
+            foreach (Match match in matches)
+            {
+                var varName = match.Groups[1].Value;
+                if (variableMap.ContainsKey(varName))
                 {
                     statement = Regex.Replace(statement,
-                        $@"\b{keyword}\b",
-                        $"{keyword} ",
-                        RegexOptions.IgnoreCase);
+                        $@"\b{varName}\b",
+                        variableMap[varName]);
+                    continue;
                 }
 
-                // Clean up multiple spaces
-                statement = Regex.Replace(statement, @"\s+", " ").Trim();
-
-                return statement;
-            }
-
-            private string RenameVariables(string statement)
-            {
-                // Find variables (letter followed by % or $)
-                var matches = Regex.Matches(statement, @"\b([a-zA-Z]+[%$])\b");
-                foreach (Match match in matches)
+                // If we haven't mapped this variable yet, check its context
+                if (variableContexts.TryGetValue(varName, out var context))
                 {
-                    var varName = match.Groups[1].Value;
-                    if (!variableMap.ContainsKey(varName))
+                    string newName;
+                    string suffix = varName.EndsWith("%") ? "%" : "$";
+
+                    // Use context information to create a meaningful name
+                    if (!string.IsNullOrEmpty(context.SuggestedName))
                     {
-                        // Generate a more meaningful name based on type
-                        string newName = varName.EndsWith("%") ?
-                            $"intVar{nextVarNumber}%" :
-                            $"strVar{nextVarNumber}$";
-                        variableMap[varName] = newName;
-                        nextVarNumber++;
+                        newName = $"{context.SuggestedName}{nextVarNumber}{suffix}";
                     }
+                    else if (context.IsArray)
+                    {
+                        newName = $"array{nextVarNumber}{suffix}";
+                    }
+                    else if (context.IsCounter)
+                    {
+                        newName = $"counter{nextVarNumber}{suffix}";
+                    }
+                    else if (context.IsFlag)
+                    {
+                        newName = $"flag{nextVarNumber}{suffix}";
+                    }
+                    else if (context.IsFileName)
+                    {
+                        newName = $"fileName{nextVarNumber}{suffix}";
+                    }
+                    else if (context.IsErrorHandler)
+                    {
+                        newName = $"error{nextVarNumber}{suffix}";
+                    }
+                    else if (context.IsParameter)
+                    {
+                        newName = $"param{nextVarNumber}{suffix}";
+                    }
+                    else if (context.PrimaryContext != null)
+                    {
+                        newName = $"{context.PrimaryContext.ToLower()}{nextVarNumber}{suffix}";
+                    }
+                    else if (!string.IsNullOrEmpty(context.ProcedureContext))
+                    {
+                        newName = $"proc{context.ProcedureContext}Var{nextVarNumber}{suffix}";
+                    }
+                    else
+                    {
+                        newName = varName.EndsWith("%") ? $"intVar{nextVarNumber}%" : $"strVar{nextVarNumber}$";
+                    }
+
+                    variableMap[varName] = newName;
+                    nextVarNumber++;
+
                     statement = Regex.Replace(statement,
                         $@"\b{varName}\b",
                         variableMap[varName]);
                 }
+            }
 
-                return statement;
+            // Also handle procedure names
+            var procMatch = Regex.Match(statement, @"(DEFPROC|PROC)([a-zA-Z][a-zA-Z0-9_]*)");
+            if (procMatch.Success)
+            {
+                var prefix = procMatch.Groups[1].Value;
+                var procName = procMatch.Groups[2].Value;
+                if (procMap.ContainsKey(procName))
+                {
+                    statement = statement.Replace(prefix + procName, prefix + procMap[procName]);
+                }
+            }
+
+            return statement;
+        }
+
+        private void GatherContext(List<string> lines)
+        {
+            string currentProc = "";
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var line = lines[i];
+                var match = Regex.Match(line, @"^(\d+)\s+(.*)$");
+                if (!match.Success) continue;
+
+                var content = match.Groups[2].Value;
+
+                // Track procedure definitions
+                var procMatch = Regex.Match(content, @"DEFPROC([a-zA-Z][a-zA-Z0-9_]*)");
+                if (procMatch.Success)
+                {
+                    currentProc = procMatch.Groups[1].Value;
+                    AnalyzeProcedureContext(content, i, lines);
+                }
+
+                // Track variable usage
+                var varMatches = Regex.Matches(content, @"\b([a-zA-Z]+[%$])\b");
+                foreach (Match varMatch in varMatches)
+                {
+                    var varName = varMatch.Groups[1].Value;
+                    if (!variableContexts.ContainsKey(varName))
+                    {
+                        variableContexts[varName] = new VariableContext();
+                    }
+
+                    var context = variableContexts[varName];
+                    context.UsageLines.Add(content);
+                    context.ProcedureContext = currentProc;
+
+                    // Analyze surrounding lines for context (-2 to +2 lines)
+                    AnalyzeVariableContext(varName, i, lines);
+                }
             }
         }
+
+        private void DetermineNames()
+        {
+            foreach (var context in variableContexts)
+            {
+                string varName = context.Key;
+                var ctx = context.Value;
+                string newName;
+
+                if (ctx.IsCounter)
+                    newName = "counter" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                else if (ctx.IsFlag)
+                    newName = "flag" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                else if (ctx.IsFileName)
+                    newName = "fileName" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                else if (ctx.IsErrorHandler)
+                    newName = "error" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                else if (ctx.RelatedKeywords.Any())
+                    newName = ctx.RelatedKeywords.First().ToLower() + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                else if (ctx.ProcedureContext != "")
+                    newName = "proc" + ctx.ProcedureContext + "Var" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                else
+                    newName = "var" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+
+                variableMap[varName] = newName;
+                nextVarNumber++;
+            }
+
+            // Also determine procedure names if they haven't been mapped yet
+            foreach (var proc in procMap.Keys.ToList())
+            {
+                if (!procMap.ContainsKey(proc))
+                {
+                    procMap[proc] = "Proc" + proc;
+                }
+            }
+        }
+
+        // Helper method to identify type-specific prefixes
+        private string GetTypePrefix(string varName, List<string> usageContext)
+        {
+            if (usageContext.Any(l => l.Contains("FOR") && l.Contains(varName)))
+                return "loop";
+            if (usageContext.Any(l => l.Contains("OPENIN") || l.Contains("OPENOUT")))
+                return "file";
+            if (usageContext.Any(l => l.Contains("ERROR") || l.Contains("ERL")))
+                return "err";
+            if (usageContext.Any(l => l.Contains("MENU") || l.Contains("WINDOW")))
+                return "ui";
+            if (usageContext.Any(l => l.Contains("PROC") && l.Contains(varName)))
+                return "proc";
+
+            return "var";
+        }
+
+        private void AnalyzeProcedureContext(string procDef, int lineIndex, List<string> lines)
+        {
+            var procMatch = Regex.Match(procDef, @"DEFPROC([a-zA-Z][a-zA-Z0-9_]*)");
+            if (!procMatch.Success) return;
+
+            var procName = procMatch.Groups[1].Value;
+            var contextLines = new List<string>();
+            string newProcName = null;
+
+            // Collect next few lines after procedure definition for context
+            for (int i = lineIndex + 1; i < Math.Min(lines.Count, lineIndex + 5); i++)
+            {
+                var match = Regex.Match(lines[i], @"^(\d+)\s+(.*)$");
+                if (match.Success)
+                    contextLines.Add(match.Groups[2].Value);
+            }
+
+            // Common action patterns
+            var actionPatterns = new Dictionary<string, string>
+            {
+                { @"OPEN\w+\s+[a-zA-Z%$]", "File" },        // File operations
+                { @"SYS\s*""Wimp", "Wimp" },                // RISC OS Wimp operations
+                { @"SYS[^""]+[a-zA-Z%$]", "System" },       // Other system calls
+                { @"CASE|OF|WHEN|END\s*CASE", "Switch" },   // Case handling
+                { @"ERROR|ERR|ERL", "Error" },              // Error handling
+                { @"DRAW|PLOT|MOVE|COLOUR", "Draw" },       // Graphics operations
+                { @"SOUND|BEATS|VOICE|TEMPO", "Sound" },     // Sound operations
+                { @"MOUSE|POINTER", "Mouse" },              // Mouse handling
+                { @"MENU|SELECT", "Menu" },                 // Menu operations
+                { @"LOAD|SAVE", "Data" },                   // Data operations
+                { @"PROC[a-zA-Z]+\s*\(.*\)", "Call" }      // Procedure calls
+            };
+
+                    // Object patterns (nouns)
+                    var objectPatterns = new Dictionary<string, string>
+            {
+                { @"Window|WIN", "Window" },
+                { @"Menu", "Menu" },
+                { @"File", "File" },
+                { @"Data", "Data" },
+                { @"Buffer", "Buffer" },
+                { @"Screen", "Screen" },
+                { @"Button|BTN", "Button" },
+                { @"List", "List" },
+                { @"Icon", "Icon" }
+            };
+
+            // First look for action patterns
+            foreach (var pattern in actionPatterns)
+            {
+                if (contextLines.Any(line => Regex.IsMatch(line, pattern.Key, RegexOptions.IgnoreCase)))
+                {
+                    newProcName = "Handle" + pattern.Value;
+                    break;
+                }
+            }
+
+            // If no action pattern found, look for object patterns
+            if (newProcName == null)
+            {
+                foreach (var pattern in objectPatterns)
+                {
+                    if (contextLines.Any(line => Regex.IsMatch(line, pattern.Key, RegexOptions.IgnoreCase)))
+                    {
+                        newProcName = "Process" + pattern.Value;
+                        break;
+                    }
+                }
+            }
+
+            // Special case handlers
+            if (newProcName == null)
+            {
+                // Check for initialization pattern (setting multiple variables)
+                if (contextLines.Count(line => line.Contains("=")) > 2)
+                {
+                    newProcName = "Initialize";
+                }
+                // Check for cleanup pattern (lots of ENDs or CLOSEs)
+                else if (contextLines.Count(line => line.Contains("END") || line.Contains("CLOSE")) > 1)
+                {
+                    newProcName = "Cleanup";
+                }
+                // Default case handler
+                else
+                {
+                    newProcName = "Process";
+                }
+            }
+
+            // Add unique number to avoid name conflicts
+            int suffix = 1;
+            string baseName = newProcName;
+            while (procMap.ContainsValue(newProcName))
+            {
+                newProcName = baseName + suffix;
+                suffix++;
+            }
+
+            // Add to procedure map
+            procMap[procName] = newProcName;
+        }
+
+        private void AnalyzeVariableContext(string varName, int lineIndex, List<string> lines)
+        {
+            var context = variableContexts[varName];
+            var surroundingLines = new List<string>();
+            var isInteger = varName.EndsWith("%");
+            var isString = varName.EndsWith("$");
+
+            // Collect lines before and after (2 lines each direction)
+            for (int i = Math.Max(0, lineIndex - 2); i <= Math.Min(lines.Count - 1, lineIndex + 2); i++)
+            {
+                var match = Regex.Match(lines[i], @"^(\d+)\s+(.*)$");
+                if (match.Success)
+                    surroundingLines.Add(match.Groups[2].Value);
+            }
+
+            // Common variable usage patterns
+            var patterns = new Dictionary<string, (string category, string suggestedName)>
+            {
+                // File handling patterns
+                { @"OPENIN.*" + varName, ("File", "inputFile") },
+                { @"OPENOUT.*" + varName, ("File", "outputFile") },
+                { @"BGET.*" + varName, ("File", "fileHandle") },
+                { @"BPUT.*" + varName, ("File", "fileHandle") },
+                
+                // Window/UI patterns
+                { @"WINDOW.*" + varName, ("Window", "window") },
+                { @"MENU.*" + varName, ("Menu", "menu") },
+                { @"ICON.*" + varName, ("UI", "icon") },
+                { @"BUTTON.*" + varName, ("UI", "button") },
+                
+                // System patterns
+                { @"SYS.*" + varName, ("System", "sysParam") },
+                { @"TIME.*" + varName, ("System", "time") },
+                { @"PAGE.*" + varName, ("System", "page") },
+                
+                // Graphics patterns
+                { @"PLOT.*" + varName, ("Graphics", "plotCoord") },
+                { @"DRAW.*" + varName, ("Graphics", "drawCoord") },
+                { @"COLOUR.*" + varName, ("Graphics", "color") },
+                { @"POINT.*" + varName, ("Graphics", "point") },
+
+                // Counter patterns
+                { @"FOR\s+" + varName + @"\s*=", ("Counter", "index") },
+                { @"STEP.*" + varName, ("Counter", "step") },
+                { @"COUNT.*" + varName, ("Counter", "count") },
+
+                // Boolean/Flag patterns
+                { @"IF.*" + varName + @".*THEN", ("Flag", "flag") },
+                { @"UNTIL.*" + varName, ("Flag", "condition") },
+                { @"WHILE.*" + varName, ("Flag", "condition") },
+
+                // Error handling patterns
+                { @"ERROR.*" + varName, ("Error", "errorCode") },
+                { @"ERL.*" + varName, ("Error", "errorLine") },
+                { @"ERR.*" + varName, ("Error", "error") }
+            };
+
+            // Check each line against patterns
+            foreach (var line in surroundingLines)
+            {
+                foreach (var pattern in patterns)
+                {
+                    if (Regex.IsMatch(line, pattern.Key, RegexOptions.IgnoreCase))
+                    {
+                        context.RelatedKeywords.Add(pattern.Value.category);
+                        context.SuggestedName = pattern.Value.suggestedName;
+                        break;
+                    }
+                }
+
+                // Special case analysis
+                AnalyzeSpecialCases(line, varName, context);
+            }
+
+            // Post-analysis refinements
+            RefineVariableContext(context, isInteger, isString);
+        }
+
+        private void AnalyzeSpecialCases(string line, string varName, VariableContext context)
+        {
+            // Detect array usage
+            if (Regex.IsMatch(line, varName + @"\s*\([^\)]+\)"))
+            {
+                context.IsArray = true;
+                if (!context.RelatedKeywords.Contains("Array"))
+                    context.RelatedKeywords.Add("Array");
+            }
+
+            // Detect string manipulation
+            if (Regex.IsMatch(line, @"LEFT\$|RIGHT\$|MID\$|STR\$|STRING\$") && line.Contains(varName))
+            {
+                context.IsStringManipulation = true;
+                if (!context.RelatedKeywords.Contains("String"))
+                    context.RelatedKeywords.Add("String");
+            }
+
+            // Detect mathematical operations
+            if (Regex.IsMatch(line, @"[+\-*/\\]" + varName) || Regex.IsMatch(line, varName + @"[+\-*/\\]"))
+            {
+                context.IsMathOperation = true;
+                if (!context.RelatedKeywords.Contains("Math"))
+                    context.RelatedKeywords.Add("Math");
+            }
+
+            // Detect procedure parameters
+            if (Regex.IsMatch(line, @"PROC\w+[^)]*" + varName + @"[^)]*\)"))
+            {
+                context.IsParameter = true;
+                if (!context.RelatedKeywords.Contains("Param"))
+                    context.RelatedKeywords.Add("Param");
+            }
+        }
+
+        private void RefineVariableContext(VariableContext context, bool isInteger, bool isString)
+        {
+            // If we have multiple contexts, prioritize them
+            if (context.RelatedKeywords.Count > 1)
+            {
+                // Priority order for multiple contexts
+                var priorityOrder = new[]
+                {
+                    "Error", "File", "Window", "Menu", "Graphics",
+                    "Counter", "Flag", "System", "Array", "String",
+                    "Math", "Param"
+                };
+
+                foreach (var priority in priorityOrder)
+                {
+                    if (context.RelatedKeywords.Contains(priority))
+                    {
+                        context.PrimaryContext = priority;
+                        break;
+                    }
+                }
+            }
+            else if (context.RelatedKeywords.Count == 1)
+            {
+                context.PrimaryContext = context.RelatedKeywords.First();
+            }
+
+            // Add type-specific context if not already present
+            if (isInteger && !context.RelatedKeywords.Contains("Integer"))
+                context.RelatedKeywords.Add("Integer");
+            if (isString && !context.RelatedKeywords.Contains("String"))
+                context.RelatedKeywords.Add("String");
+
+            // Set IsTemporary if the variable is used in a very limited scope
+            context.IsTemporary = context.UsageLines.Count <= 2;
+        }
     }
+}
+
