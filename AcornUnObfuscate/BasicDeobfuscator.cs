@@ -322,105 +322,71 @@ namespace AcornUnObfuscate
 
         private void AnalyzeProcedureContext(string procDef, int lineIndex, List<string> lines)
         {
+            // First try WIMP-specific analysis
+            AnalyzeWimpProcedure(procDef, lineIndex, lines);
+
+            // If no WIMP-specific name was assigned, fall back to general analysis
             var procMatch = Regex.Match(procDef, @"DEFPROC([a-zA-Z][a-zA-Z0-9_]*)");
             if (!procMatch.Success) return;
 
             var procName = procMatch.Groups[1].Value;
-            var contextLines = new List<string>();
-            string newProcName = null;
 
-            // Collect next few lines after procedure definition for context
-            for (int i = lineIndex + 1; i < Math.Min(lines.Count, lineIndex + 5); i++)
+            // If procedure wasn't mapped by WIMP analysis, use original analysis
+            if (!procMap.ContainsKey(procName))
             {
-                var match = Regex.Match(lines[i], @"^(\d+)\s+(.*)$");
-                if (match.Success)
-                    contextLines.Add(match.Groups[2].Value);
-            }
+                var contextLines = new List<string>();
+                string newProcName = null;
 
-            // Common action patterns
-            var actionPatterns = new Dictionary<string, string>
-            {
-                { @"OPEN\w+\s+[a-zA-Z%$]", "File" },        // File operations
-                { @"SYS\s*""Wimp", "Wimp" },                // RISC OS Wimp operations
-                { @"SYS[^""]+[a-zA-Z%$]", "System" },       // Other system calls
-                { @"CASE|OF|WHEN|END\s*CASE", "Switch" },   // Case handling
-                { @"ERROR|ERR|ERL", "Error" },              // Error handling
-                { @"DRAW|PLOT|MOVE|COLOUR", "Draw" },       // Graphics operations
-                { @"SOUND|BEATS|VOICE|TEMPO", "Sound" },     // Sound operations
-                { @"MOUSE|POINTER", "Mouse" },              // Mouse handling
-                { @"MENU|SELECT", "Menu" },                 // Menu operations
-                { @"LOAD|SAVE", "Data" },                   // Data operations
-                { @"PROC[a-zA-Z]+\s*\(.*\)", "Call" }      // Procedure calls
-            };
-
-                    // Object patterns (nouns)
-                    var objectPatterns = new Dictionary<string, string>
-            {
-                { @"Window|WIN", "Window" },
-                { @"Menu", "Menu" },
-                { @"File", "File" },
-                { @"Data", "Data" },
-                { @"Buffer", "Buffer" },
-                { @"Screen", "Screen" },
-                { @"Button|BTN", "Button" },
-                { @"List", "List" },
-                { @"Icon", "Icon" }
-            };
-
-            // First look for action patterns
-            foreach (var pattern in actionPatterns)
-            {
-                if (contextLines.Any(line => Regex.IsMatch(line, pattern.Key, RegexOptions.IgnoreCase)))
+                // Collect next few lines after procedure definition for context
+                for (int i = lineIndex + 1; i < Math.Min(lines.Count, lineIndex + 5); i++)
                 {
-                    newProcName = "Handle" + pattern.Value;
-                    break;
+                    var match = Regex.Match(lines[i], @"^(\d+)\s+(.*)$");
+                    if (match.Success)
+                        contextLines.Add(match.Groups[2].Value);
                 }
-            }
 
-            // If no action pattern found, look for object patterns
-            if (newProcName == null)
-            {
-                foreach (var pattern in objectPatterns)
+                // Original action patterns
+                var actionPatterns = new Dictionary<string, string>
+        {
+            { @"OPEN\w+\s+[a-zA-Z%$]", "File" },
+            { @"SYS\s*""Wimp", "Wimp" },
+            { @"SYS[^""]+[a-zA-Z%$]", "System" },
+            { @"CASE|OF|WHEN|END\s*CASE", "Switch" },
+            { @"ERROR|ERR|ERL", "Error" },
+            { @"DRAW|PLOT|MOVE|COLOUR", "Draw" },
+            { @"SOUND|BEATS|VOICE|TEMPO", "Sound" },
+            { @"MOUSE|POINTER", "Mouse" },
+            { @"MENU|SELECT", "Menu" },
+            { @"LOAD|SAVE", "Data" }
+        };
+
+                // First look for action patterns
+                foreach (var pattern in actionPatterns)
                 {
                     if (contextLines.Any(line => Regex.IsMatch(line, pattern.Key, RegexOptions.IgnoreCase)))
                     {
-                        newProcName = "Process" + pattern.Value;
+                        newProcName = "Handle" + pattern.Value;
                         break;
                     }
                 }
-            }
 
-            // Special case handlers
-            if (newProcName == null)
-            {
-                // Check for initialization pattern (setting multiple variables)
-                if (contextLines.Count(line => line.Contains("=")) > 2)
+                // If no pattern found, use generic name
+                if (newProcName == null)
                 {
-                    newProcName = "Initialize";
+                    newProcName = "HandleSystem";
                 }
-                // Check for cleanup pattern (lots of ENDs or CLOSEs)
-                else if (contextLines.Count(line => line.Contains("END") || line.Contains("CLOSE")) > 1)
-                {
-                    newProcName = "Cleanup";
-                }
-                // Default case handler
-                else
-                {
-                    newProcName = "Process";
-                }
-            }
 
-            // Add unique number to avoid name conflicts
-            int suffix = 1;
-            string baseName = newProcName;
-            while (procMap.ContainsValue(newProcName))
-            {
-                newProcName = baseName + suffix;
-                suffix++;
-            }
+                // Add unique number to avoid name conflicts
+                int suffix = 1;
+                string baseName = newProcName;
+                while (procMap.ContainsValue(newProcName))
+                {
+                    newProcName = baseName + suffix;
+                    suffix++;
+                }
 
-            // Add to procedure map
-            procMap[procName] = newProcName;
+                procMap[procName] = newProcName;
+            }
         }
 
         private void AnalyzeVariableContext(string varName, int lineIndex, List<string> lines)
@@ -571,6 +537,98 @@ namespace AcornUnObfuscate
 
             // Set IsTemporary if the variable is used in a very limited scope
             context.IsTemporary = context.UsageLines.Count <= 2;
+        }
+
+        private void AnalyzeWimpProcedure(string procDef, int lineIndex, List<string> lines)
+        {
+            var procMatch = Regex.Match(procDef, @"DEFPROC([a-zA-Z][a-zA-Z0-9_]*)");
+            if (!procMatch.Success) return;
+
+            var procName = procMatch.Groups[1].Value;
+            var procedureLines = new List<string>();
+
+            // Get the full procedure content
+            int i = lineIndex + 1;
+            while (i < lines.Count && !lines[i].Contains("ENDPROC"))
+            {
+                var match = Regex.Match(lines[i], @"^(\d+)\s+(.*)$");
+                if (match.Success)
+                {
+                    procedureLines.Add(match.Groups[2].Value);
+                }
+                i++;
+            }
+
+            string newProcName = null;
+            string fullProcText = string.Join(" ", procedureLines);
+
+            // Check WIMP patterns first
+            foreach (var pattern in RiscOsPatterns.WimpPatterns)
+            {
+                if (procedureLines.Any(l => Regex.IsMatch(l, pattern.Key)))
+                {
+                    newProcName = pattern.Value.name;
+                    break;
+                }
+            }
+
+            // If no WIMP pattern matched, check SWI patterns
+            if (newProcName == null)
+            {
+                foreach (var swi in RiscOsPatterns.SwiPatterns)
+                {
+                    if (procedureLines.Any(l => l.Contains(swi.Key)))
+                    {
+                        newProcName = $"Handle{swi.Value.prefix}";
+                        break;
+                    }
+                }
+            }
+
+            // If still no match, check common patterns
+            if (newProcName == null)
+            {
+                foreach (var pattern in RiscOsPatterns.CommonPatterns)
+                {
+                    if (pattern.Value.All(p => procedureLines.Any(l => Regex.IsMatch(l, p, RegexOptions.IgnoreCase))))
+                    {
+                        newProcName = $"Handle{pattern.Key}";
+                        break;
+                    }
+                }
+            }
+
+            // Special cases based on content analysis
+            if (newProcName == null)
+            {
+                if (procedureLines.Any(l => l.Contains("CASE") && l.Contains("WHEN") && l.Contains("\"")))
+                {
+                    // Look for message handling
+                    var messageMatch = Regex.Match(fullProcText, @"WHEN\s+""([^""]+)""");
+                    if (messageMatch.Success)
+                    {
+                        newProcName = $"Process{messageMatch.Groups[1].Value}Message";
+                    }
+                }
+                else if (procedureLines.Any(l => l.Contains("Template")))
+                {
+                    newProcName = "HandleTemplate";
+                }
+            }
+
+            // Add unique number if name exists
+            if (newProcName != null)
+            {
+                int suffix = 1;
+                string baseName = newProcName;
+                while (procMap.ContainsValue(newProcName))
+                {
+                    newProcName = baseName + suffix;
+                    suffix++;
+                }
+
+                procMap[procName] = newProcName;
+            }
         }
     }
 }

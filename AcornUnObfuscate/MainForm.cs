@@ -17,6 +17,7 @@ namespace AcornUnOfuscate
         private RichTextBox richTextBox;
         private BasicDeobfuscator deobfuscator;
         private string[] previousLines;
+        private BasicSyntaxHighlighter syntaxHighlighter;
 
         public MainForm()
         {
@@ -59,8 +60,9 @@ namespace AcornUnOfuscate
                 ReadOnly = true,
                 Font = new System.Drawing.Font("Consolas", 12F),
                 WordWrap = false,
-                ForeColor = Color.White,
-                BackColor = Color.FromArgb(30, 30, 30)
+                ForeColor = Color.FromArgb(220, 220, 220),
+                BackColor = Color.FromArgb(30, 30, 30),
+                DetectUrls = false
             };
 
             // Form setup
@@ -69,6 +71,8 @@ namespace AcornUnOfuscate
             Controls.Add(menuStrip);
             Text = "Acorn BASIC Detokenizer";
             Size = new System.Drawing.Size(800, 600);
+
+            syntaxHighlighter = new BasicSyntaxHighlighter(richTextBox);
         }
 
         private void RevertChanges(object? sender, EventArgs e)
@@ -78,6 +82,7 @@ namespace AcornUnOfuscate
             richTextBox.Lines = previousLines;
             richTextBox.SelectionStart = 0;
             richTextBox.Visible = true;
+            syntaxHighlighter.HighlightSyntax();
         }
 
         private void DeObfuscate(object sender, EventArgs e)
@@ -93,6 +98,7 @@ namespace AcornUnOfuscate
             }
             richTextBox.SelectionStart = 0;
             richTextBox.Visible = true;
+            syntaxHighlighter.HighlightSyntax();
         }
 
         private void OpenFile(object sender, EventArgs e)
@@ -117,6 +123,7 @@ namespace AcornUnOfuscate
 
                         // Scroll to top
                         richTextBox.SelectionStart = 0;
+                        syntaxHighlighter.HighlightSyntax();
                         richTextBox.Visible = true;
                     }
                     catch (Exception ex)
