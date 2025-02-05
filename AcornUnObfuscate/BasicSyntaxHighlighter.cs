@@ -19,16 +19,23 @@ namespace AcornUnOfuscate
         private readonly Color DefaultColor = Color.FromArgb(220, 220, 220);   // Light grey for default text
         private readonly Color ProcColor = Color.FromArgb(220, 220, 170);      // Light yellow for PROC/FN
         private readonly Color SysColor = Color.FromArgb(197, 134, 192);       // Purple for SYS calls
+        private readonly Color OperatorColor = Color.FromArgb(180, 180, 180);  // Grey for operators
 
-        // BBC BASIC Keywords
-        private readonly HashSet<string> Keywords = new HashSet<string>
+        // BBC BASIC Keywords - expanded list
+        private readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "AND", "DIV", "EOR", "MOD", "OR", "ERROR", "LINE", "OFF", "STEP", "SPC", "TAB",
             "ELSE", "THEN", "OPENIN", "PTR", "PAGE", "TIME", "LOMEM", "HIMEM", "TRUE", "FALSE",
             "DEF", "ENDPROC", "LOCAL", "RETURN", "REPEAT", "UNTIL", "FOR", "NEXT", "GOTO",
             "GOSUB", "IF", "CASE", "WHEN", "OF", "ENDCASE", "WHILE", "ENDIF", "ENDWHILE",
             "DIM", "PRINT", "INPUT", "REM", "DATA", "READ", "RESTORE", "CLS", "CLG", "MODE",
-            "ENVELOPE", "SOUND", "MOVE", "DRAW", "PLOT", "GCOL", "COLOUR", "VDU", "PROC", "FN"
+            "ENVELOPE", "SOUND", "MOVE", "DRAW", "PLOT", "GCOL", "COLOUR", "VDU", "PROC", "FN",
+            "ENDCASE", "OTHERWISE", "CHAIN", "OSCLI", "END", "CLOSE", "OPENOUT", "BPUT", "BGET"
+        };
+
+        private readonly HashSet<string> Operators = new HashSet<string>
+        {
+            "+", "-", "*", "/", "=", "<", ">", ">=", "<=", "<>", "<<", ">>", "!", "?", "$", "%"
         };
 
         public BasicSyntaxHighlighter(RichTextBox richTextBox)
@@ -38,81 +45,113 @@ namespace AcornUnOfuscate
 
         public void HighlightSyntax()
         {
-            string text = _richTextBox.Text;
+            //_richTextBox.BeginUpdate();
+            _richTextBox.SuspendLayout();
+
             // Store current selection
             int selectionStart = _richTextBox.SelectionStart;
             int selectionLength = _richTextBox.SelectionLength;
 
-            //_richTextBox.BeginUpdate();
-            _richTextBox.SuspendLayout();
-
             // Default color for all text
-            _richTextBox.SelectAll();
+            _richTextBox.SelectionStart = 0;
+            _richTextBox.SelectionLength = _richTextBox.TextLength;
             _richTextBox.SelectionColor = DefaultColor;
 
-            // Process each line separately
-            string[] lines = text.Split('\n');
-            int currentPosition = 0;
+            // Process each line
+            int position = 0;
+            string[] lines = _richTextBox.Lines;
 
-            foreach (string line in lines)
+            foreach (string originalLine in lines)
             {
-                // Handle line numbers
-                var lineNumberMatch = Regex.Match(line, @"^\s*(\d+)\s");
-                if (lineNumberMatch.Success)
+                if (string.IsNullOrWhiteSpace(originalLine))
                 {
-                    ColorSegment(currentPosition, lineNumberMatch.Length, NumberColor);
-                    currentPosition += lineNumberMatch.Length;
+                    position += originalLine.Length + 1;
+                    continue;
                 }
 
-                // Handle REM comments
-                var remMatch = Regex.Match(line, @"\bREM\b.*$");
-                if (remMatch.Success)
+                string line = originalLine;
+                int lineStart = position;
+
+                // Handle line numbers first
+                Match lineNumMatch = Regex.Match(line, @"^\s*(\d+)\s");
+                if (lineNumMatch.Success)
                 {
-                    ColorSegment(currentPosition + remMatch.Index, remMatch.Length, CommentColor);
+                    ColorSegment(lineStart + lineNumMatch.Groups[1].Index,
+                               lineNumMatch.Groups[1].Length,
+                               NumberColor);
+                    line = line.Substring(lineNumMatch.Length);
+                    lineStart += lineNumMatch.Length;
+                }
+
+                // Handle REM comments - these take precedence
+                int remIndex = line.IndexOf("REM", StringComparison.OrdinalIgnoreCase);
+                if (remIndex >= 0)
+                {
+                    ColorSegment(lineStart + remIndex, line.Length - remIndex, CommentColor);
                 }
                 else
                 {
-                    // Handle strings
-                    foreach (Match match in Regex.Matches(line, "\"[^\"]*\""))
+                    // Handle string literals
+                    int startQuote = -1;
+                    for (int i = 0; i < line.Length; i++)
                     {
-                        ColorSegment(currentPosition + match.Index, match.Length, StringColor);
+                        if (line[i] == '"')
+                        {
+                            if (startQuote == -1)
+                                startQuote = i;
+                            else
+                            {
+                                ColorSegment(lineStart + startQuote, i - startQuote + 1, StringColor);
+                                startQuote = -1;
+                            }
+                        }
                     }
 
                     // Handle keywords
                     foreach (string keyword in Keywords)
                     {
-                        foreach (Match match in Regex.Matches(line, $@"\b{keyword}\b"))
+                        foreach (Match match in Regex.Matches(line, $@"\b{keyword}\b", RegexOptions.IgnoreCase))
                         {
-                            ColorSegment(currentPosition + match.Index, match.Length, KeywordColor);
+                            ColorSegment(lineStart + match.Index, match.Length, KeywordColor);
                         }
                     }
 
-                    // Handle PROC calls and definitions
-                    foreach (Match match in Regex.Matches(line, @"(PROC|FN)[A-Za-z0-9_]+"))
+                    // Handle PROC calls and definitions separately
+                    foreach (Match match in Regex.Matches(line, @"\b(PROC|FN)[A-Za-z0-9_]+", RegexOptions.IgnoreCase))
                     {
-                        ColorSegment(currentPosition + match.Index, match.Length, ProcColor);
+                        ColorSegment(lineStart + match.Index, match.Length, ProcColor);
                     }
 
-                    // Handle SYS calls
-                    foreach (Match match in Regex.Matches(line, @"SYS\s+""[^""]*"""))
+                    // Handle SYS commands
+                    foreach (Match match in Regex.Matches(line, @"SYS\s*""[^""]*""", RegexOptions.IgnoreCase))
                     {
-                        ColorSegment(currentPosition + match.Index, match.Length, SysColor);
+                        ColorSegment(lineStart + match.Index, match.Length, SysColor);
                     }
 
-                    // Handle numbers
-                    foreach (Match match in Regex.Matches(line, @"\b\d+\b|&[0-9A-Fa-f]+\b"))
+                    // Handle numbers (including hex)
+                    foreach (Match match in Regex.Matches(line, @"\b(&[0-9A-Fa-f]+|\d+)\b"))
                     {
-                        ColorSegment(currentPosition + match.Index, match.Length, NumberColor);
+                        ColorSegment(lineStart + match.Index, match.Length, NumberColor);
+                    }
+
+                    // Handle operators
+                    foreach (string op in Operators)
+                    {
+                        int opIndex = 0;
+                        while ((opIndex = line.IndexOf(op, opIndex)) != -1)
+                        {
+                            ColorSegment(lineStart + opIndex, op.Length, OperatorColor);
+                            opIndex += op.Length;
+                        }
                     }
                 }
 
-                currentPosition += line.Length + 1; // +1 for newline
+                position += originalLine.Length + 1; // +1 for newline
             }
 
             // Restore selection
             _richTextBox.SelectionStart = selectionStart;
             _richTextBox.SelectionLength = selectionLength;
-            _richTextBox.SelectionColor = DefaultColor;
 
             _richTextBox.ResumeLayout();
             //_richTextBox.EndUpdate();
@@ -120,12 +159,23 @@ namespace AcornUnOfuscate
 
         private void ColorSegment(int start, int length, Color color)
         {
-            if (start < 0 || length <= 0 || start + length > _richTextBox.TextLength)
-                return;
+            try
+            {
+                if (start < 0 || length <= 0 || start >= _richTextBox.TextLength)
+                    return;
 
-            _richTextBox.SelectionStart = start;
-            _richTextBox.SelectionLength = length;
-            _richTextBox.SelectionColor = color;
+                // Ensure we don't go past the end of the text
+                if (start + length > _richTextBox.TextLength)
+                    length = _richTextBox.TextLength - start;
+
+                _richTextBox.SelectionStart = start;
+                _richTextBox.SelectionLength = length;
+                _richTextBox.SelectionColor = color;
+            }
+            catch
+            {
+                // Ignore any out of range errors
+            }
         }
     }
 }
