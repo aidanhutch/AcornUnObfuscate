@@ -52,6 +52,11 @@ namespace AcornUnOfuscate
             deobfuscateMenu.DropDownItems.Add(deobfuscateMenuItem2);
             menuStrip.Items.Add(deobfuscateMenu);
 
+            //new menu for help / about
+            ToolStripMenuItem helpMenu = new ToolStripMenuItem("Help");
+            ToolStripMenuItem aboutMenuItem = new ToolStripMenuItem("About", null, (s, e) => MessageBox.Show("Acorn BASIC Deobfuscator\n\nThis tool is designed to help deobfuscate Acorn BASIC code.\n\n(c) 2025 Aidan Hutchinson\n\nContributors: Aidan Hutchinson\n\nhttps://github.com/aidanhutch/AcornUnObfuscate", "About", MessageBoxButtons.OK, MessageBoxIcon.Information));
+            helpMenu.DropDownItems.Add(aboutMenuItem);
+            menuStrip.Items.Add(helpMenu);
 
             // Setup RichTextBox
             richTextBox = new RichTextBox
@@ -69,7 +74,7 @@ namespace AcornUnOfuscate
             
             Controls.Add(richTextBox);
             Controls.Add(menuStrip);
-            Text = "Acorn BASIC Detokenizer";
+            Text = "Acorn BASIC Deobfuscator";
             Size = new System.Drawing.Size(800, 600);
 
             syntaxHighlighter = new BasicSyntaxHighlighter(richTextBox);
