@@ -1,4 +1,4 @@
-﻿namespace AcornUnOfuscate
+﻿namespace AcornUnObfuscate
 {
     partial class MainForm
     {

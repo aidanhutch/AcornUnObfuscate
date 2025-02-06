@@ -1,36 +1,16 @@
-﻿
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 
 namespace AcornUnObfuscate
 {
+    // ReSharper disable once IdentifierTypo
     public class BasicDeobfuscator
     {
-        private Dictionary<string, string> variableMap;
-        private Dictionary<string, string> procMap;
-        private Dictionary<string, VariableContext> variableContexts;
-        private int nextVarNumber;
+        private Dictionary<string, string> variableMap = new();
+        private Dictionary<string, string> procMap = new();
+        private Dictionary<string, VariableContext> variableContexts = new();
+        private int _nextVarNumber = 1;
 
-        public BasicDeobfuscator()
-        {
-            variableMap = new Dictionary<string, string>();
-            procMap = new Dictionary<string, string>();
-            variableContexts = new Dictionary<string, VariableContext>();
-            nextVarNumber = 1;
-        }
-
-        private readonly Dictionary<string, string[]> contextKeywords = new Dictionary<string, string[]>
-        {
-            { "File", new[] { "OPENIN", "OPENOUT", "CLOSE", "BGET", "BPUT", "EOF", "PTR", "EXT" } },
-            { "Error", new[] { "ERROR", "ERR", "ERL", "REPORT" } },
-            { "Counter", new[] { "FOR", "NEXT", "STEP", "COUNT" } },
-            { "Flag", new[] { "TRUE", "FALSE", "IF", "THEN", "ELSE" } },
-            { "Menu", new[] { "MENU", "ITEM", "SELECT" } },
-            { "Window", new[] { "WINDOW", "CLOSE", "TITLE" } }
-        };
-
+        // ReSharper disable once IdentifierTypo
         public List<string> DeobfuscateCode(List<string> lines)
         {
             // First pass: gather context
@@ -52,6 +32,7 @@ namespace AcornUnObfuscate
                 var content = match.Groups[2].Value;
 
                 // Process the line content
+                // ReSharper disable once IdentifierTypo
                 var deobfuscatedLine = DeobfuscateLine(content);
 
                 // Handle indentation based on keywords
@@ -103,6 +84,7 @@ namespace AcornUnObfuscate
             return result;
         }
 
+        // ReSharper disable once IdentifierTypo
         private string DeobfuscateLine(string line)
         {
             // Split multiple statements on colon
@@ -162,52 +144,52 @@ namespace AcornUnObfuscate
                 if (variableContexts.TryGetValue(varName, out var context))
                 {
                     string newName;
-                    string suffix = varName.EndsWith("%") ? "%" : "$";
+                    var suffix = varName.EndsWith("%") ? "%" : "$";
 
                     // Use context information to create a meaningful name
                     if (!string.IsNullOrEmpty(context.SuggestedName))
                     {
-                        newName = $"{context.SuggestedName}{nextVarNumber}{suffix}";
+                        newName = $"{context.SuggestedName}{_nextVarNumber}{suffix}";
                     }
                     else if (context.IsArray)
                     {
-                        newName = $"array{nextVarNumber}{suffix}";
+                        newName = $"array{_nextVarNumber}{suffix}";
                     }
                     else if (context.IsCounter)
                     {
-                        newName = $"counter{nextVarNumber}{suffix}";
+                        newName = $"counter{_nextVarNumber}{suffix}";
                     }
                     else if (context.IsFlag)
                     {
-                        newName = $"flag{nextVarNumber}{suffix}";
+                        newName = $"flag{_nextVarNumber}{suffix}";
                     }
                     else if (context.IsFileName)
                     {
-                        newName = $"fileName{nextVarNumber}{suffix}";
+                        newName = $"fileName{_nextVarNumber}{suffix}";
                     }
                     else if (context.IsErrorHandler)
                     {
-                        newName = $"error{nextVarNumber}{suffix}";
+                        newName = $"error{_nextVarNumber}{suffix}";
                     }
                     else if (context.IsParameter)
                     {
-                        newName = $"param{nextVarNumber}{suffix}";
+                        newName = $"param{_nextVarNumber}{suffix}";
                     }
                     else if (context.PrimaryContext != null)
                     {
-                        newName = $"{context.PrimaryContext.ToLower()}{nextVarNumber}{suffix}";
+                        newName = $"{context.PrimaryContext.ToLower()}{_nextVarNumber}{suffix}";
                     }
                     else if (!string.IsNullOrEmpty(context.ProcedureContext))
                     {
-                        newName = $"proc{context.ProcedureContext}Var{nextVarNumber}{suffix}";
+                        newName = $"proc{context.ProcedureContext}Var{_nextVarNumber}{suffix}";
                     }
                     else
                     {
-                        newName = varName.EndsWith("%") ? $"intVar{nextVarNumber}%" : $"strVar{nextVarNumber}$";
+                        newName = varName.EndsWith("%") ? $"intVar{_nextVarNumber}%" : $"strVar{_nextVarNumber}$";
                     }
 
                     variableMap[varName] = newName;
-                    nextVarNumber++;
+                    _nextVarNumber++;
 
                     statement = Regex.Replace(statement,
                         $@"\b{varName}\b",
@@ -232,9 +214,9 @@ namespace AcornUnObfuscate
 
         private void GatherContext(List<string> lines)
         {
-            string currentProc = "";
+            var currentProc = "";
 
-            for (int i = 0; i < lines.Count; i++)
+            for (var i = 0; i < lines.Count; i++)
             {
                 var line = lines[i];
                 var match = Regex.Match(line, @"^(\d+)\s+(.*)$");
@@ -274,27 +256,27 @@ namespace AcornUnObfuscate
         {
             foreach (var context in variableContexts)
             {
-                string varName = context.Key;
+                var varName = context.Key;
                 var ctx = context.Value;
                 string newName;
 
                 if (ctx.IsCounter)
-                    newName = "counter" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                    newName = "counter" + _nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
                 else if (ctx.IsFlag)
-                    newName = "flag" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                    newName = "flag" + _nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
                 else if (ctx.IsFileName)
-                    newName = "fileName" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                    newName = "fileName" + _nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
                 else if (ctx.IsErrorHandler)
-                    newName = "error" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                    newName = "error" + _nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
                 else if (ctx.RelatedKeywords.Any())
-                    newName = ctx.RelatedKeywords.First().ToLower() + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                    newName = ctx.RelatedKeywords.First().ToLower() + _nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
                 else if (ctx.ProcedureContext != "")
-                    newName = "proc" + ctx.ProcedureContext + "Var" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                    newName = "proc" + ctx.ProcedureContext + "Var" + _nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
                 else
-                    newName = "var" + nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
+                    newName = "var" + _nextVarNumber + (varName.EndsWith("%") ? "%" : "$");
 
                 variableMap[varName] = newName;
-                nextVarNumber++;
+                _nextVarNumber++;
             }
 
             // Also determine procedure names if they haven't been mapped yet
@@ -342,7 +324,7 @@ namespace AcornUnObfuscate
                 string newProcName = null;
 
                 // Collect next few lines after procedure definition for context
-                for (int i = lineIndex + 1; i < Math.Min(lines.Count, lineIndex + 5); i++)
+                for (var i = lineIndex + 1; i < Math.Min(lines.Count, lineIndex + 5); i++)
                 {
                     var match = Regex.Match(lines[i], @"^(\d+)\s+(.*)$");
                     if (match.Success)
@@ -351,18 +333,18 @@ namespace AcornUnObfuscate
 
                 // Original action patterns
                 var actionPatterns = new Dictionary<string, string>
-        {
-            { @"OPEN\w+\s+[a-zA-Z%$]", "File" },
-            { @"SYS\s*""Wimp", "Wimp" },
-            { @"SYS[^""]+[a-zA-Z%$]", "System" },
-            { @"CASE|OF|WHEN|END\s*CASE", "Switch" },
-            { @"ERROR|ERR|ERL", "Error" },
-            { @"DRAW|PLOT|MOVE|COLOUR", "Draw" },
-            { @"SOUND|BEATS|VOICE|TEMPO", "Sound" },
-            { @"MOUSE|POINTER", "Mouse" },
-            { @"MENU|SELECT", "Menu" },
-            { @"LOAD|SAVE", "Data" }
-        };
+                {
+                    { @"OPEN\w+\s+[a-zA-Z%$]", "File" },
+                    { @"SYS\s*""Wimp", "Wimp" },
+                    { @"SYS[^""]+[a-zA-Z%$]", "System" },
+                    { @"CASE|OF|WHEN|END\s*CASE", "Switch" },
+                    { @"ERROR|ERR|ERL", "Error" },
+                    { @"DRAW|PLOT|MOVE|COLOUR", "Draw" },
+                    { @"SOUND|BEATS|VOICE|TEMPO", "Sound" },
+                    { @"MOUSE|POINTER", "Mouse" },
+                    { @"MENU|SELECT", "Menu" },
+                    { @"LOAD|SAVE", "Data" }
+                };
 
                 // First look for action patterns
                 foreach (var pattern in actionPatterns)
@@ -381,8 +363,8 @@ namespace AcornUnObfuscate
                 }
 
                 // Add unique number to avoid name conflicts
-                int suffix = 1;
-                string baseName = newProcName;
+                var suffix = 1;
+                var baseName = newProcName;
                 while (procMap.ContainsValue(newProcName))
                 {
                     newProcName = baseName + suffix;
@@ -401,7 +383,7 @@ namespace AcornUnObfuscate
             var isString = varName.EndsWith("$");
 
             // Collect lines before and after (2 lines each direction)
-            for (int i = Math.Max(0, lineIndex - 2); i <= Math.Min(lines.Count - 1, lineIndex + 2); i++)
+            for (var i = Math.Max(0, lineIndex - 2); i <= Math.Min(lines.Count - 1, lineIndex + 2); i++)
             {
                 var match = Regex.Match(lines[i], @"^(\d+)\s+(.*)$");
                 if (match.Success)
@@ -552,7 +534,7 @@ namespace AcornUnObfuscate
             var procedureLines = new List<string>();
 
             // Get the full procedure content
-            int i = lineIndex + 1;
+            var i = lineIndex + 1;
             while (i < lines.Count && !lines[i].Contains("ENDPROC"))
             {
                 var match = Regex.Match(lines[i], @"^(\d+)\s+(.*)$");
@@ -564,7 +546,7 @@ namespace AcornUnObfuscate
             }
 
             string newProcName = null;
-            string fullProcText = string.Join(" ", procedureLines);
+            var fullProcText = string.Join(" ", procedureLines);
 
             // Check WIMP patterns first
             foreach (var pattern in RiscOsPatterns.WimpPatterns)
@@ -623,8 +605,8 @@ namespace AcornUnObfuscate
             // Add unique number if name exists
             if (newProcName != null)
             {
-                int suffix = 1;
-                string baseName = newProcName;
+                var suffix = 1;
+                var baseName = newProcName;
                 while (procMap.ContainsValue(newProcName))
                 {
                     newProcName = baseName + suffix;
