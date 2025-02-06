@@ -21,9 +21,9 @@ A Windows application for detokenizing and deobfuscating BBC BASIC source code f
 
 ## Installation
 
-1. Download the latest release from the [releases page](https://github.com/aidanhutch/AcornUnObfuscate.git)
+1. Download the latest release from the [releases page](https://github.com/aidanhutch/AcornUnObfuscate/blob/master/Releases/AcornUnObfuscate1.2.0.zip)
 2. Extract the ZIP file to your desired location
-3. Run `AcornBasicDetokenizer.exe`
+3. Run `AcornUnObfuscate.exe`
 
 ## Usage
 
@@ -89,17 +89,20 @@ git clone https://github.com/aidanhutch/AcornUnObfuscate.git
 2. Open `AcornBasicDetokenizer.sln` in Visual Studio
 
 3. Build the solution:
+   In Visual Studio press F5 or click green arrow to Build/Run app.
+   Or in Visual Studio Code Terminal window type:
 ```bash
 dotnet build
 ```
 
 ## Contributing
 
-1. Fork the repository
+1. Clone the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+6. Contact me for review
 
 ## License
 
@@ -113,7 +116,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-Your Name - [@aidanhutch](https://twitter.com/aidanhutch)
+Aidan Hutchinson - [@aidanhutch](https://twitter.com/aidanhutch)
 
 ## Release History
 
