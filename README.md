@@ -4,7 +4,8 @@
 
 A Windows application for detokenizing and deobfuscating BBC BASIC source code files from Acorn/RISC OS systems. Features syntax highlighting similar to Visual Studio's style.
 
-https://github.com/aidanhutch/AcornUnObfuscate/blob/master/Docs/Screenshot%202025-02-06%20100249.png
+![alt text](https://github.com/aidanhutch/AcornUnObfuscate/blob/master/Docs/Screenshot%202025-02-06%20100249.png?raw=true)
+
 
 ## Features
 
