@@ -1,5 +1,7 @@
 # AcornUnObfuscate
 
+By Aidan Hutchinson, 06/02/2025
+
 # Acorn BBC BASIC Detokenizer and Deobfuscator
 
 A Windows application for detokenizing and deobfuscating BBC BASIC source code files from Acorn/RISC OS systems. Features syntax highlighting similar to Visual Studio's style.
