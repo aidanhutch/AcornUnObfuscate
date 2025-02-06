@@ -89,6 +89,7 @@ git clone https://github.com/aidanhutch/AcornUnObfuscate.git
 2. Open `AcornBasicDetokenizer.sln` in Visual Studio
 
 3. Build the solution:
+   
    In Visual Studio press F5 or click green arrow to Build/Run app.
    Or in Visual Studio Code Terminal window type:
 ```bash
