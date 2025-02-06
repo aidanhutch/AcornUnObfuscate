@@ -56,6 +56,10 @@ namespace AcornUnObfuscate
 
                 // Handle indentation based on keywords
                 var statements = deobfuscatedLine.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+
+                //need to make we dont go out of bounds
+                if (statements.Length == 0)
+                    continue;
                 var firstStatement = statements[0].Trim();
 
                 // Reduce indent for ending blocks

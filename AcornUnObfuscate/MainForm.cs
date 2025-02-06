@@ -58,7 +58,7 @@ namespace AcornUnOfuscate
             {
                 Dock = DockStyle.Fill,
                 ReadOnly = true,
-                Font = new System.Drawing.Font("Consolas", 12F),
+                Font = new System.Drawing.Font("Consolas", 10F),
                 WordWrap = false,
                 ForeColor = Color.FromArgb(220, 220, 220),
                 BackColor = Color.FromArgb(30, 30, 30),
@@ -87,18 +87,20 @@ namespace AcornUnOfuscate
 
         private void DeObfuscate(object sender, EventArgs e)
         {
+            richTextBox.Visible = false;
             var text = richTextBox.Lines.ToList();
             previousLines = richTextBox.Lines;
             var converted = deobfuscator.DeobfuscateCode(text);
             richTextBox.Clear();
-            richTextBox.Visible = false;
+           
             foreach (var line in converted)
             {
                 richTextBox.AppendText($"{line}\n");
             }
             richTextBox.SelectionStart = 0;
-            richTextBox.Visible = true;
+            
             syntaxHighlighter.HighlightSyntax();
+            richTextBox.Visible = true;
         }
 
         private void OpenFile(object sender, EventArgs e)
