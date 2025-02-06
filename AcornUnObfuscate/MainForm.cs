@@ -1,23 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using AcornUnObfuscate;
+﻿using AcornUnOfuscate;
+// ReSharper disable IdentifierTypo
+// ReSharper disable CommentTypo
 
-namespace AcornUnOfuscate
+namespace AcornUnObfuscate
 {
     public partial class MainForm : Form
     {
-        private BasicDetokenizer detokenizer;
-        private RichTextBox richTextBox;
-        private BasicDeobfuscator deobfuscator;
-        private string[] previousLines;
-        private BasicSyntaxHighlighter syntaxHighlighter;
+        private readonly BasicDetokenizer detokenizer;
+        private RichTextBox _richTextBox;
+        private readonly BasicDeobfuscator deobfuscator;
+        private string[] _previousLines;
+        private BasicSyntaxHighlighter _syntaxHighlighter;
 
         public MainForm()
         {
@@ -34,10 +27,10 @@ namespace AcornUnOfuscate
             this.BackColor = Color.FromArgb(30, 30, 30);
 
             // Setup MenuStrip
-            MenuStrip menuStrip = new MenuStrip();
-            ToolStripMenuItem fileMenu = new ToolStripMenuItem("File");
-            ToolStripMenuItem openMenuItem = new ToolStripMenuItem("Open", null, OpenFile);
-            ToolStripMenuItem exitMenuItem = new ToolStripMenuItem("Exit", null, (s, e) => Close());
+            var menuStrip = new MenuStrip();
+            var fileMenu = new ToolStripMenuItem("File");
+            var openMenuItem = new ToolStripMenuItem("Open", null, OpenFile);
+            var exitMenuItem = new ToolStripMenuItem("Exit", null, (s, e) => Close());
 
             fileMenu.DropDownItems.Add(openMenuItem);
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
@@ -45,21 +38,21 @@ namespace AcornUnOfuscate
             menuStrip.Items.Add(fileMenu);
 
             //new menu for deobfuscation
-            ToolStripMenuItem deobfuscateMenu = new ToolStripMenuItem("Deobfuscate");
-            ToolStripMenuItem deobfuscateMenuItem = new ToolStripMenuItem("Deobfuscate", null, DeObfuscate);
-            ToolStripMenuItem deobfuscateMenuItem2 = new ToolStripMenuItem("Revert Changes", null, RevertChanges);
+            var deobfuscateMenu = new ToolStripMenuItem("Deobfuscate");
+            var deobfuscateMenuItem = new ToolStripMenuItem("Deobfuscate", null, DeObfuscate);
+            var deobfuscateMenuItem2 = new ToolStripMenuItem("Revert Changes", null, RevertChanges);
             deobfuscateMenu.DropDownItems.Add(deobfuscateMenuItem);
             deobfuscateMenu.DropDownItems.Add(deobfuscateMenuItem2);
             menuStrip.Items.Add(deobfuscateMenu);
 
             //new menu for help / about
-            ToolStripMenuItem helpMenu = new ToolStripMenuItem("Help");
-            ToolStripMenuItem aboutMenuItem = new ToolStripMenuItem("About", null, (s, e) => MessageBox.Show("Acorn BASIC Deobfuscator\n\nThis tool is designed to help deobfuscate Acorn BASIC code.\n\n(c) 2025 Aidan Hutchinson\n\nContributors: Aidan Hutchinson\n\nhttps://github.com/aidanhutch/AcornUnObfuscate", "About", MessageBoxButtons.OK, MessageBoxIcon.Information));
+            var helpMenu = new ToolStripMenuItem("Help");
+            var aboutMenuItem = new ToolStripMenuItem("About", null, (s, e) => MessageBox.Show("Acorn BASIC Deobfuscator\n\nThis tool is designed to help deobfuscate Acorn BASIC code.\n\n(c) 2025 Aidan Hutchinson\n\nContributors: Aidan Hutchinson\n\nhttps://github.com/aidanhutch/AcornUnObfuscate", "About", MessageBoxButtons.OK, MessageBoxIcon.Information));
             helpMenu.DropDownItems.Add(aboutMenuItem);
             menuStrip.Items.Add(helpMenu);
 
             // Setup RichTextBox
-            richTextBox = new RichTextBox
+            _richTextBox = new RichTextBox
             {
                 Dock = DockStyle.Fill,
                 ReadOnly = true,
@@ -72,45 +65,45 @@ namespace AcornUnOfuscate
 
             // Form setup
             
-            Controls.Add(richTextBox);
+            Controls.Add(_richTextBox);
             Controls.Add(menuStrip);
             Text = "Acorn BASIC Deobfuscator";
             Size = new System.Drawing.Size(800, 600);
 
-            syntaxHighlighter = new BasicSyntaxHighlighter(richTextBox);
+            _syntaxHighlighter = new BasicSyntaxHighlighter(_richTextBox);
         }
 
         private void RevertChanges(object? sender, EventArgs e)
         {
-            richTextBox.Visible = false;
-            richTextBox.Clear();
-            richTextBox.Lines = previousLines;
-            richTextBox.SelectionStart = 0;
-            richTextBox.Visible = true;
-            syntaxHighlighter.HighlightSyntax();
+            _richTextBox.Visible = false;
+            _richTextBox.Clear();
+            _richTextBox.Lines = _previousLines;
+            _richTextBox.SelectionStart = 0;
+            _richTextBox.Visible = true;
+            _syntaxHighlighter.HighlightSyntax();
         }
 
         private void DeObfuscate(object sender, EventArgs e)
         {
-            richTextBox.Visible = false;
-            var text = richTextBox.Lines.ToList();
-            previousLines = richTextBox.Lines;
+            _richTextBox.Visible = false;
+            var text = _richTextBox.Lines.ToList();
+            _previousLines = _richTextBox.Lines;
             var converted = deobfuscator.DeobfuscateCode(text);
-            richTextBox.Clear();
+            _richTextBox.Clear();
            
             foreach (var line in converted)
             {
-                richTextBox.AppendText($"{line}\n");
+                _richTextBox.AppendText($"{line}\n");
             }
-            richTextBox.SelectionStart = 0;
+            _richTextBox.SelectionStart = 0;
             
-            syntaxHighlighter.HighlightSyntax();
-            richTextBox.Visible = true;
+            _syntaxHighlighter.HighlightSyntax();
+            _richTextBox.Visible = true;
         }
 
         private void OpenFile(object sender, EventArgs e)
         {
-            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            using (var openFileDialog = new OpenFileDialog())
             {
                 openFileDialog.Filter = "BBC BASIC files (*.bas)|*.bas|All files (*.*)|*.*";
                 openFileDialog.FilterIndex = 1;
@@ -120,18 +113,18 @@ namespace AcornUnOfuscate
                     try
                     {
                         var lines = detokenizer.DetokenizeFile(openFileDialog.FileName);
-                        richTextBox.Clear();
+                        _richTextBox.Clear();
 
-                        richTextBox.Visible = false;
+                        _richTextBox.Visible = false;
                         foreach (var line in lines)
                         {
-                            richTextBox.AppendText($"{line.LineNumber} {line.Content}\n");
+                            _richTextBox.AppendText($"{line.LineNumber} {line.Content}\n");
                         }
 
                         // Scroll to top
-                        richTextBox.SelectionStart = 0;
-                        syntaxHighlighter.HighlightSyntax();
-                        richTextBox.Visible = true;
+                        _richTextBox.SelectionStart = 0;
+                        _syntaxHighlighter.HighlightSyntax();
+                        _richTextBox.Visible = true;
                     }
                     catch (Exception ex)
                     {
