@@ -21,7 +21,7 @@ A Windows application for detokenizing and deobfuscating BBC BASIC source code f
 
 ## Installation
 
-1. Download the latest release from the [releases page](https://github.com/aidanhutch/AcornUnObfuscate/blob/master/Releases/AcornUnObfuscate1.2.0.zip)
+1. Download the latest release from the [releases page](https://github.com/aidanhutch/AcornUnObfuscate/blob/master/Releases)
 2. Extract the ZIP file to your desired location
 3. Run `AcornUnObfuscate.exe`
 
